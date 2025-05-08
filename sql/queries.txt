@@ -1,0 +1,154 @@
+/* Query 1 * /
+
+SELECT 	Customer_Name,
+		Purchase_Amount,
+		Genre
+FROM
+		(SELECT 	Customer.FirstName || ' ' || Customer.LastName AS Customer_Name,
+				Invoice.CustomerId,
+				Genre.Name AS Genre,
+				sum(InvoiceLine.UnitPrice) AS Purchase_Amount,
+				dense_rank() OVER (PARTITION BY Genre.Name ORDER BY sum(InvoiceLine.UnitPrice)DESC) AS RANK
+
+		FROM 	Customer
+		JOIN 	Invoice
+		ON 		Customer.CustomerId = Invoice.CustomerId
+		JOIN 	InvoiceLine
+		ON		Invoice.InvoiceId = InvoiceLine.InvoiceId
+		JOIN	Track
+		ON		InvoiceLine.TrackId = Track.TrackId
+		JOIN 	Genre
+		ON 		Genre.GenreId = Track.GenreId
+
+		GROUP BY 1,2,3
+		ORDER BY 3)  AS first_sub
+
+WHERE RANK IN (1,2,3) AND GENRE = 'Sci Fi & Fantasy'
+ORDER BY RANK
+
+
+/* Query 2 */
+
+WITH Sales_rep_sub
+
+AS
+	(
+			SELECT 	Employee.EmployeeId,
+					Employee.FirstName || ' ' || Employee.LastName AS Sales_Agent,
+					Invoice.CustomerId,
+					sum(Invoice.Total) AS Total_Purchase
+
+			FROM 	Invoice
+			JOIN	Customer
+			ON 		Customer.CustomerId = Invoice.InvoiceId
+			JOIN	Employee
+			ON 		Customer.SupportRepId = Employee.EmployeeId
+
+			GROUP BY 1,2,3
+			ORDER BY 1
+	)
+
+SELECT  Sales_Agent,
+		avg( Total_Purchase) Avg_invoice_amount,
+		dense_rank() OVER (ORDER BY avg( Total_Purchase)DESC) AS Sales_Performance_Rank
+
+FROM Sales_rep_sub
+
+GROUP BY 1;
+
+
+/* Query 3 */
+
+WITH sub
+
+AS
+
+(SELECT
+    Invoice.CustomerId
+   ,Invoice.BillingCountry AS Country
+   ,STRFTIME('%Y', Invoice.InvoiceDate) AS Date_of_Purchase
+   ,SUM(Invoice.Total) AS total_amount
+
+  FROM Invoice
+  JOIN InvoiceLine
+    ON Invoice.InvoiceId = InvoiceLine.InvoiceId
+  JOIN Track
+    ON InvoiceLine.TrackId = Track.TrackId
+  JOIN Genre
+    ON Track.GenreId = Genre.GenreId
+
+  GROUP BY 1
+          ,2
+          ,3)
+
+SELECT
+  COUNT(sub.CustomerId) AS Count_of_New_Customers
+ ,sub.Country
+ ,SUM(sub.total_amount) AS Amount_Spent
+
+FROM sub
+
+WHERE Date_of_Purchase = '2013'
+AND Date_of_Purchase NOT IN ('2009', '2010', '2011', '2012')
+
+GROUP BY 2
+ORDER BY 1 DESC;
+
+/* Query 4 */
+
+WITH firstsub
+AS
+(SELECT
+    InvoiceLine.TrackId AS Track_Id
+   ,Artist.ArtistId AS Artist_Id
+
+  FROM InvoiceLine
+  JOIN Track
+    ON InvoiceLine.TrackId = Track.TrackId
+  JOIN Album
+    ON Track.AlbumId = Album.AlbumId
+  JOIN Artist
+    ON Album.ArtistId = Artist.ArtistId),
+secondsub
+AS
+(SELECT
+    Artist.ArtistId
+   ,COUNT(firstsub.Artist_Id) AS No_of_Artist_Sales
+
+  FROM Artist
+  LEFT JOIN firstsub
+    ON Artist.ArtistId = firstsub.Artist_Id
+
+  GROUP BY 1)
+
+SELECT
+  Artist.ArtistId
+ ,Artist.Name
+ ,secondsub.No_of_Artist_Sales
+ ,NTILE(2) OVER (ORDER BY secondsub.No_of_Artist_Sales DESC) AS No_of_Sales_Bucket
+ ,CASE
+    WHEN NTILE(2) OVER (ORDER BY secondsub.No_of_Artist_Sales DESC) = 1 AND
+      secondsub.No_of_Artist_Sales > (SELECT
+          AVG(No_of_Artist_Sales) AS Avg_Artist_Sales
+        FROM secondsub) THEN 'Top_Selling ARTIST'
+
+    WHEN NTILE(2) OVER (ORDER BY secondsub.No_of_Artist_Sales DESC) = 1 AND
+      secondsub.No_of_Artist_Sales <= (SELECT
+          AVG(No_of_Artist_Sales) AS Avg_Artist_Sales
+        FROM secondsub) THEN 'Low_Selling ARTIST'
+
+    WHEN NTILE(2) OVER (ORDER BY secondsub.No_of_Artist_Sales DESC) = 2 AND
+      secondsub.No_of_Artist_Sales >= (SELECT
+          AVG(No_of_Artist_Sales) AS Avg_Artist_Sales
+        FROM secondsub) THEN 'Top_Selling ARTIST'
+
+    WHEN NTILE(2) OVER (ORDER BY secondsub.No_of_Artist_Sales DESC) = 2 AND
+      secondsub.No_of_Artist_Sales <= (SELECT
+          AVG(No_of_Artist_Sales) AS Avg_Artist_Sales
+        FROM secondsub) THEN 'Low_Selling Artist'
+
+  END AS Artist_Sales
+
+FROM Artist
+JOIN secondsub
+  ON Artist.ArtistId = secondsub.ArtistId;

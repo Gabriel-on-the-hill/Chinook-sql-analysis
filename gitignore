@@ -1,0 +1,24 @@
+# SQL files (if using temporary scripts)
+*.sql~
+
+# Office and Presentation files (optional to ignore if large or sensitive)
+*.pptx
+*.pdf
+*.xlsx
+*.xls
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor and environment settings
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Logs and lock files
+*.log
+*.bak
+*.tmp
+*.lock
